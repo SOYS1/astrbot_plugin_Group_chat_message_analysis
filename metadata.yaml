@@ -1,0 +1,5 @@
+name: astrbot_plugin_group_chat_message_analysis
+desc: 根据关键词分析群聊消息内容并生成可视化报告
+version: v1.0.0
+author: Your Name
+repo: https://github.com/yourusername/astrbot_plugin_group_chat_message_analysis
