@@ -131,14 +131,8 @@ class MessageHandler:
 
     def _expand_keyword_variants(self, keyword: str) -> List[str]:
         """
-        智能语义扩展系统 - 无需预定义词典
-        基于字符相似度、网络用语变形、上下文模式识别
-        
-        Args:
-            keyword: 任意关键词
-            
-        Returns:
-            动态生成的语义相关词汇列表
+        精准关键词扩展 - 针对技术/日常场景优化
+        减少无效扩展，增加实际相关词汇
         """
         keyword = keyword.lower().strip()
         if not keyword:
@@ -146,187 +140,111 @@ class MessageHandler:
         
         variants = [keyword]
         
-        # 1. 字符级智能变形
-        variants.extend(self._generate_char_variants(keyword))
+        # 1. 技术词汇扩展（针对报错、bug等）
+        tech_keywords = {
+            "报错": ["错误", "异常", "bug", "故障", "问题", "error", "exception", "崩溃", "出错"],
+            "错误": ["报错", "异常", "bug", "故障", "问题"],
+            "异常": ["报错", "错误", "bug", "故障", "异常退出"],
+            "bug": ["漏洞", "缺陷", "问题", "报错", "错误"],
+            "崩溃": ["闪退", "崩溃", "卡死", "无响应", "死机"],
+            "代码": ["程序", "脚本", "项目", "工程"],
+            "运行": ["执行", "启动", "调用", "运行中"],
+            "服务器": ["服务", "后端", "接口", "api"],
+            "网络": ["网卡", "断网", "连接", "超时"]
+        }
         
-        # 2. 网络用语智能识别
-        variants.extend(self._generate_internet_variants(keyword))
+        # 2. 日常词汇扩展
+        daily_keywords = {
+            "吃饭": ["用餐", "就餐", "吃饭饭", "吃点", "吃饭了吗"],
+            "睡觉": ["休息", "就寝", "睡吧", "困了", "晚安"],
+            "工作": ["上班", "干活", "加班", "下班", "摸鱼"],
+            "学习": ["看书", "复习", "考试", "作业", "学习ing"]
+        }
         
-        # 3. 语义场动态扩展
-        variants.extend(self._generate_semantic_variants(keyword))
+        # 3. 网络用语扩展（精选）
+        internet_keywords = {
+            "笑死": ["xswl", "笑死我了", "哈哈哈", "笑不活了"],
+            "厉害": ["牛逼", "nb", "太强了", "牛啊"],
+            "无语": ["emmmm", "无语子", "裂开", "麻了"]
+        }
         
-        # 4. 上下文模式匹配
-        variants.extend(self._generate_contextual_variants(keyword))
+        # 合并所有扩展
+        all_extensions = {**tech_keywords, **daily_keywords, **internet_keywords}
         
-        # 5. 模糊匹配变体
-        variants.extend(self._generate_fuzzy_variants(keyword))
+        # 查找匹配的关键词扩展
+        for base_word, extensions in all_extensions.items():
+            if base_word in keyword or keyword in base_word:
+                variants.extend(extensions)
         
-        # 去重并排序（按相关度）
+        # 4. 智能后缀扩展（仅对2-4字关键词）
+        if 2 <= len(keyword) <= 4:
+            smart_suffixes = ["了", "的", "了", "一下", "了", "吗"]
+            for suffix in smart_suffixes:
+                if len(keyword + suffix) <= 6:  # 限制总长度
+                    variants.append(keyword + suffix)
+        
+        # 5. 同义词扩展（基于实际使用场景）
+        synonyms = {
+            "问题": ["毛病", "状况", "情况", "现象"],
+            "解决": ["修复", "搞定", "处理", "搞定它"],
+            "着急": ["焦虑", "烦躁", "上火", "急死"]
+        }
+        
+        for word, syns in synonyms.items():
+            if word in keyword:
+                variants.extend(syns)
+        
+        # 去重并按相关度排序
         seen = set()
         unique_variants = []
+        
         for variant in variants:
             variant = variant.strip()
             if variant and variant != keyword and variant not in seen:
                 seen.add(variant)
-                # 计算相关度分数用于排序
-                score = self._calculate_relevance_score(keyword, variant)
+                # 计算相关度（越短越相关，包含关系更相关）
+                score = 100 - len(variant) * 2  # 长度惩罚
+                
+                # 包含关系加分
+                if keyword in variant or variant in keyword:
+                    score += 50
+                
+                # 技术词汇加分
+                tech_bonus_words = ["error", "bug", "异常", "错误", "故障"]
+                if any(tech in variant.lower() for tech in tech_bonus_words):
+                    score += 30
+                
                 unique_variants.append((variant, score))
         
-        # 按相关度排序，取前30个
+        # 按分数排序，取前10个最相关的
         unique_variants.sort(key=lambda x: x[1], reverse=True)
-        final_variants = [keyword] + [item[0] for item in unique_variants[:30]]
+        final_variants = [keyword] + [item[0] for item in unique_variants[:10]]
         
-        logger.info(f"智能扩展 '{keyword}' → {len(final_variants)}个变体: {final_variants}")
+        logger.info(f"精准扩展 '{keyword}' → {len(final_variants)}个相关变体: {final_variants}")
         return final_variants
 
     def _generate_char_variants(self, keyword: str) -> List[str]:
-        """字符级智能变形"""
+        """简化的字符变形 - 仅保留实用的"了"和"的"后缀"""
         variants = []
-        
-        # 重复字变体
-        if len(keyword) <= 4:
-            variants.append(keyword + keyword)
-            if len(keyword) >= 2:
-                variants.append(keyword[0] + keyword)
-                variants.append(keyword + keyword[-1])
-        
-        # 前后缀
-        prefixes = ["大", "小", "老", "新", "超级", "真的", "假的"]
-        suffixes = ["了", "的", "一下", "了", "了", "啊", "呀", "呢"]
-        
-        for prefix in prefixes:
-            variants.append(prefix + keyword)
-        
-        for suffix in suffixes:
-            variants.append(keyword + suffix)
-        
+        if 2 <= len(keyword) <= 4:
+            variants.extend([keyword + "了", keyword + "的"])
         return variants
 
     def _generate_internet_variants(self, keyword: str) -> List[str]:
-        """网络用语智能识别"""
-        variants = []
-        
-        # 数字替换
-        num_replacements = {
-            'o': '0', 'i': '1', 'l': '1', 'z': '2', 'e': '3', 'a': '4', 
-            's': '5', 't': '7', 'b': '6', 'g': '9', 'q': '9'
-        }
-        
-        # 网络流行语模式
-        internet_patterns = {
-            "孙笑川": ["抽象", "带师", "nm$l", "新津", "恶俗", "狗粉丝", "6324", "嗨粉"],
-            "蔡徐坤": ["鸡哥", "鸡你太美", "篮球", "练习生", "两年半", "小黑子"],
-            "丁真": ["珍珠", "理塘", "电子烟", "锐刻5", "纯真", "一眼真"],
-            "马保国": ["耗子尾汁", "年轻人不讲武德", "传统功夫", "接化发", "闪电五连鞭"],
-            "李赣": ["6324", "抽象", "嗨粉", "狗粉丝", "带明星", "带秀"]
-        }
-        
-        # 检查是否是网络人物
-        for person, related in internet_patterns.items():
-            if keyword in person or person in keyword:
-                variants.extend(related)
-        
-        # 谐音梗
-        if "笑" in keyword:
-            variants.extend(["孝", "校", "效", "啸"])
-        if "川" in keyword:
-            variants.extend(["穿", "传", "船", "喘"])
-        if "坤" in keyword:
-            variants.extend(["鲲", "昆", "捆", "困"])
-        
-        # 网络缩写
-        abbreviations = {
-            "yyds": ["永远的神", "永远滴神"],
-            "xswl": ["笑死我了"],
-            "zqsg": ["真情实感"],
-            "u1s1": ["有一说一"],
-            "dddd": ["懂的都懂"]
-        }
-        
-        for abbr, full in abbreviations.items():
-            if keyword == abbr:
-                variants.extend(full)
-            elif keyword in str(full):
-                variants.append(abbr)
-        
-        return variants
+        """网络用语扩展 - 仅针对特定网络人物"""
+        return []  # 简化掉，避免过度扩展
 
     def _generate_semantic_variants(self, keyword: str) -> List[str]:
-        """语义场动态扩展"""
-        variants = []
-        
-        # 基于关键词类型的语义扩展
-        if len(keyword) <= 3:
-            # 短词扩展
-            if keyword.endswith("哥"):
-                variants.extend(["哥哥", "大哥", "老哥", "哥儿", "哥子"])
-            elif keyword.endswith("姐"):
-                variants.extend(["姐姐", "大姐", "老姐", "姐儿"])
-            elif keyword.endswith("弟"):
-                variants.extend(["弟弟", "小弟", "老弟", "弟儿"])
-            elif keyword.endswith("妹"):
-                variants.extend(["妹妹", "小妹", "老妹", "妹儿"])
-        
-        # 情感词扩展
-        emotion_words = ["喜欢", "讨厌", "爱", "恨", "想", "念", "烦", "愁", "开心", "难过"]
-        for emotion in emotion_words:
-            variants.append(emotion + keyword)
-            variants.append(keyword + emotion)
-        
-        # 动作词扩展
-        action_words = ["看", "听", "说", "想", "做", "玩", "学", "吃", "喝", "买"]
-        for action in action_words:
-            variants.append(action + keyword)
-            variants.append(keyword + action)
-        
-        return variants
+        """语义扩展 - 简化"""
+        return []
 
     def _generate_contextual_variants(self, keyword: str) -> List[str]:
-        """上下文模式匹配"""
-        variants = []
-        
-        # 基于使用场景的上下文词
-        contexts = {
-            "人名": ["这个人", "这位", "大佬", "老师", "哥", "姐", "兄弟", "朋友"],
-            "地点": ["在", "去", "到", "从", "来", "回", "路过", "经过"],
-            "时间": ["今天", "昨天", "明天", "刚才", "刚刚", "现在", "以后", "以前"],
-            "评价": ["真的", "假的", "太", "很", "超级", "特别", "非常", "有点", "稍微"]
-        }
-        
-        # 根据关键词特征添加上下文
-        for context_type, context_words in contexts.items():
-            for context in context_words:
-                variants.append(context + keyword)
-                variants.append(keyword + context)
-        
-        return variants
+        """上下文扩展 - 简化"""
+        return []
 
     def _generate_fuzzy_variants(self, keyword: str) -> List[str]:
-        """模糊匹配变体"""
-        variants = []
-        
-        # 编辑距离1的变体（插入、删除、替换）
-        if len(keyword) >= 2:
-            # 删除一个字符
-            for i in range(len(keyword)):
-                variants.append(keyword[:i] + keyword[i+1:])
-            
-            # 插入常见字符
-            common_chars = ["的", "了", "子", "儿", "啊", "呀", "呢", "吧"]
-            for char in common_chars:
-                for i in range(len(keyword) + 1):
-                    variants.append(keyword[:i] + char + keyword[i:])
-            
-            # 替换相似字符
-            similar_chars = {
-                '笑': '孝', '川': '穿', '孙': '损', '坤': '鲲',
-                '蔡': '菜', '徐': '许', '丁': '钉', '真': '针'
-            }
-            for original, similar in similar_chars.items():
-                if original in keyword:
-                    variants.append(keyword.replace(original, similar))
-        
-        return variants
+        """模糊匹配 - 简化"""
+        return []
 
     def _calculate_relevance_score(self, original: str, variant: str) -> float:
         """计算词汇相关度分数"""
