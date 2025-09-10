@@ -32,7 +32,7 @@ class GroupChatMessageAnalysis(Star):
         logger.info("群聊消息关键词分析插件已初始化")
 
     @filter.command("分析")
-    async def analyze_topic(self, event: AiocqhttpMessageEvent, keyword: str = "", *args, **kwargs):
+    async def analyze_topic(self, event: AiocqhttpMessageEvent, keyword: str = "", days: int = 2):
         """
         根据关键词分析群聊消息内容
         用法: /分析 [关键词] [天数]
@@ -51,8 +51,7 @@ class GroupChatMessageAnalysis(Star):
             return
 
         # 设置分析天数
-        days = kwargs.get('days') if 'days' in kwargs else None
-        analysis_days = days if days and 1 <= days <= 7 else self.config.get("analysis_days", 2)
+        analysis_days = days if 1 <= days <= 7 else self.config.get("analysis_days", 2)
 
         yield event.plain_result(f"🔍 开始分析群聊中关于'{keyword}'的话题，请稍候...")
 
