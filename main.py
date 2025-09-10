@@ -12,7 +12,8 @@ from collections import Counter, defaultdict
 
 from astrbot.api.event import filter
 from astrbot.api.star import Context, Star, register
-from astrbot.api import logger, AstrBotConfig
+from astrbot.core.config.astrbot_config import AstrBotConfig
+from astrbot import logger
 from astrbot.core.platform.sources.aiocqhttp.aiocqhttp_message_event import AiocqhttpMessageEvent
 
 
@@ -27,9 +28,6 @@ class GroupChatMessageAnalysis(Star):
     def __init__(self, context: Context, config: AstrBotConfig):
         super().__init__(context)
         self.config = config
-        
-        # 初始化HTML渲染器
-        self.html_render = context.html_render
         
         logger.info("群聊消息关键词分析插件已初始化")
 
