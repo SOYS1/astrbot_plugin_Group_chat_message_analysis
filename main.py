@@ -9,7 +9,7 @@ from pathlib import Path
 import sys
 
 from astrbot.api.event import filter
-from astrbot.api.star import Context, Star
+from astrbot.api.star import Context, Star, register
 from astrbot.api import logger, AstrBotConfig
 from astrbot.core.platform.sources.aiocqhttp.aiocqhttp_message_event import AiocqhttpMessageEvent
 
@@ -23,6 +23,13 @@ from src.analysis.topic_analyzer import TopicAnalyzer
 from src.visualization.report_generator import ReportGenerator
 
 
+@register(
+    "astrbot_plugin_group_chat_message_analysis",
+    "Your Name",
+    "根据关键词分析群聊消息内容并生成可视化报告",
+    "v1.0.0",
+    "https://github.com/yourusername/astrbot_plugin_group_chat_message_analysis",
+) 
 class GroupChatMessageAnalysis(Star):
     def __init__(self, context: Context, config: AstrBotConfig):
         super().__init__(context)
