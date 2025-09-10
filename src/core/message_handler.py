@@ -88,7 +88,7 @@ class MessageHandler:
                             msg_time = datetime.fromtimestamp(msg.get("time", 0))
                             oldest_msg_time = msg_time
 
-                            # 过滤时间范围
+                            # 过滤时间范围 - 放宽时间检查
                             if msg_time < start_time or msg_time > end_time:
                                 continue
 
@@ -110,9 +110,10 @@ class MessageHandler:
 
                     if valid_messages_in_round == 0:
                         logger.warning(f"群 {group_id} 本轮未获取到有效消息")
-                        break
-
-                    message_seq = round_messages[0]["message_id"]
+                        # 继续获取，不要立即退出
+                        logger.info(f"群 {group_id} 继续获取下一批消息...")
+                        
+                    message_seq = round_messages[-1]["message_id"]  # 使用最后一条消息ID继续
                     query_rounds += 1
 
                 except Exception as e:
@@ -276,20 +277,25 @@ class MessageHandler:
             是否语义相关
         """
         try:
-            text = message.get('content', '').lower().strip()
+            # 增强消息内容提取兼容性
+            text = self._extract_message_content(message)
             if not text or not keyword_variants:
                 return False
             
+            text = text.lower().strip()
             original_keyword = keyword_variants[0].lower()
+            
+            # 调试日志
+            logger.debug(f"检查消息: '{text}' 关键词: {keyword_variants}")
             
             # 1. 直接包含匹配（最高优先级）
             for variant in keyword_variants:
-                if variant in text:
-                    logger.info(f"直接匹配: '{variant}' 在消息中")
+                if variant.lower() in text:
+                    logger.info(f"直接匹配成功: '{variant}' 在消息中")
                     return True
             
-            # 2. 字符级相似度匹配
-            similarity_threshold = 0.6
+            # 2. 字符级相似度匹配（降低阈值）
+            similarity_threshold = 0.5  # 降低阈值提高匹配率
             for variant in keyword_variants:
                 similarity = self._calculate_text_similarity(text, variant)
                 if similarity >= similarity_threshold:
@@ -312,13 +318,74 @@ class MessageHandler:
             if self._pinyin_similarity_match(text, original_keyword):
                 return True
             
+            logger.debug(f"消息不匹配: '{text}'")
             return False
             
         except Exception as e:
             logger.error(f"语义匹配出错: {e}")
             # 回退到简单包含匹配
-            return any(variant in str(message.get('content', '')).lower() 
-                      for variant in keyword_variants)
+            text = self._extract_message_content(message)
+            if text:
+                return any(variant.lower() in text.lower() 
+                          for variant in keyword_variants)
+            return False
+
+    def _extract_message_content(self, message: Dict) -> str:
+        """增强消息内容提取，支持多种格式"""
+        try:
+            # 尝试多种可能的消息格式
+            
+            # 标准格式
+            content = message.get('content', '').strip()
+            if content:
+                return content
+            
+            # CQ码格式
+            raw_message = message.get('raw_message', '').strip()
+            if raw_message:
+                return raw_message
+            
+            # 消息数组格式
+            message_list = message.get('message', [])
+            if isinstance(message_list, list):
+                content_parts = []
+                for msg_part in message_list:
+                    if isinstance(msg_part, dict):
+                        # 文本消息
+                        if msg_part.get('type') == 'text':
+                            text_data = msg_part.get('data', {})
+                            if isinstance(text_data, dict):
+                                content_parts.append(text_data.get('text', ''))
+                            else:
+                                content_parts.append(str(text_data))
+                        # 其他类型消息
+                        elif msg_part.get('type') == 'at':
+                            at_data = msg_part.get('data', {})
+                            if isinstance(at_data, dict):
+                                qq = at_data.get('qq', '')
+                                if qq == 'all':
+                                    content_parts.append('@全体成员')
+                                else:
+                                    content_parts.append(f'@{qq}')
+                
+                combined_content = ''.join(content_parts).strip()
+                if combined_content:
+                    return combined_content
+            
+            # 直接字符串格式
+            if isinstance(message_list, str):
+                return message_list.strip()
+            
+            # fallback到字符串表示
+            message_str = str(message.get('message', ''))
+            if message_str and message_str != '{}':
+                return message_str
+            
+            return ""
+            
+        except Exception as e:
+            logger.error(f"消息内容提取失败: {e}")
+            return ""
 
     def _calculate_text_similarity(self, text: str, keyword: str) -> float:
         """计算文本相似度"""
