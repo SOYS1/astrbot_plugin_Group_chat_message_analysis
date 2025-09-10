@@ -6,17 +6,21 @@
 import asyncio
 from typing import Optional
 from pathlib import Path
+import sys
 
 from astrbot.api.event import filter
 from astrbot.api.star import Context, Star
 from astrbot.api import logger, AstrBotConfig
 from astrbot.core.platform.sources.aiocqhttp.aiocqhttp_message_event import AiocqhttpMessageEvent
 
+# 动态添加当前目录到Python路径
+plugin_dir = Path(__file__).parent
+sys.path.insert(0, str(plugin_dir))
 
 # 导入模块化组件
-from .src.core.message_handler import MessageHandler
-from .src.analysis.topic_analyzer import TopicAnalyzer
-from .src.visualization.report_generator import ReportGenerator
+from src.core.message_handler import MessageHandler
+from src.analysis.topic_analyzer import TopicAnalyzer
+from src.visualization.report_generator import ReportGenerator
 
 
 class GroupChatMessageAnalysis(Star):
@@ -28,6 +32,9 @@ class GroupChatMessageAnalysis(Star):
         self.message_handler = MessageHandler()
         self.topic_analyzer = TopicAnalyzer(config)
         self.report_generator = ReportGenerator()
+        
+        # 初始化HTML渲染器
+        self.html_render = context.html_render
         
         logger.info("群聊消息关键词分析插件已初始化")
 
