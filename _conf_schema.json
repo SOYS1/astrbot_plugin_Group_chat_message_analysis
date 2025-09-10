@@ -1,0 +1,26 @@
+{
+    "analysis_days": {
+        "type": "int",
+        "description": "默认分析天数",
+        "default": 2,
+        "hint": "默认分析最近几天的消息，建议1-7天"
+    },
+    "max_messages": {
+        "type": "int",
+        "description": "最大分析消息数量",
+        "default": 500,
+        "hint": "单次分析的最大消息条数"
+    },
+    "enable_llm_analysis": {
+        "type": "bool",
+        "description": "启用LLM分析",
+        "default": true,
+        "hint": "是否使用LLM进行智能话题分析"
+    },
+    "interrupt_threshold": {
+        "type": "int",
+        "description": "会话中断时间阈值（秒）",
+        "default": 1800,
+        "hint": "超过此时间间隔的消息将被分为不同的会话（默认30分钟）"
+    }
+}
