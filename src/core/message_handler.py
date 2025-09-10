@@ -129,99 +129,91 @@ class MessageHandler:
             logger.error(f"获取群 {group_id} 消息时发生错误: {e}")
             return []
 
-    def _expand_keyword_variants(self, keyword: str) -> List[str]:
-        """
-        精准关键词扩展 - 针对技术/日常场景优化
-        减少无效扩展，增加实际相关词汇
-        """
+    def _expand_keyword_variants(self, keyword: str):
+        """智能关键词扩展，包含用户描述错误的各种隐晦方式"""
         keyword = keyword.lower().strip()
         if not keyword:
             return []
         
         variants = [keyword]
         
-        # 1. 技术词汇扩展（针对报错、bug等）
-        tech_keywords = {
-            "报错": ["错误", "异常", "bug", "故障", "问题", "error", "exception", "崩溃", "出错"],
-            "错误": ["报错", "异常", "bug", "故障", "问题"],
-            "异常": ["报错", "错误", "bug", "故障", "异常退出"],
-            "bug": ["漏洞", "缺陷", "问题", "报错", "错误"],
-            "崩溃": ["闪退", "崩溃", "卡死", "无响应", "死机"],
-            "代码": ["程序", "脚本", "项目", "工程"],
-            "运行": ["执行", "启动", "调用", "运行中"],
-            "服务器": ["服务", "后端", "接口", "api"],
-            "网络": ["网卡", "断网", "连接", "超时"]
+        # 技术场景关键词映射
+        tech_scenarios = {
+            "报错": [
+                # 直接描述
+                "错误", "异常", "bug", "故障", "问题", "error", "exception", "崩溃", "出错",
+                # 隐晦表达 - 用户求助场景
+                "怎么办", "怎么解决", "求助", "帮帮我", "救命", "急", "在线等", "求助贴",
+                # 问题描述
+                "坏了", "不行了", "出问题了", "出事了", "崩了", "挂了", "死机了", "卡死了",
+                # 具体错误现象
+                "打不开", "无法启动", "运行不了", "闪退了", "无响应", "黑屏", "白屏", "卡住了",
+                # 调试相关
+                "调试", "排查", "定位", "日志", "stack trace", "堆栈", "traceback"
+            ],
+            "错误": [
+                "报错", "异常", "bug", "故障", "问题", "error", "mistake", "failure"
+            ],
+            "异常": [
+                "报错", "错误", "bug", "故障", "异常退出", "非正常", "意外"
+            ],
+            "bug": [
+                "漏洞", "缺陷", "问题", "报错", "错误", "故障", "issue"
+            ],
+            "崩溃": [
+                "闪退", "崩溃", "卡死", "无响应", "死机", "宕机", "down机"
+            ],
+            "怎么办": [
+                "怎么解决", "求助", "帮帮我", "如何处理", "怎么修复", "怎么搞", "求教"
+            ],
+            "救命": [
+                "救急", "求救", "帮帮忙", "大佬", "有人吗", "在线等"
+            ],
+            "挂了": [
+                "崩了", "死了", "无响应", "卡死", "宕机", "down了"
+            ]
         }
         
-        # 2. 日常词汇扩展
+        # 日常词汇扩展
         daily_keywords = {
-            "吃饭": ["用餐", "就餐", "吃饭饭", "吃点", "吃饭了吗"],
-            "睡觉": ["休息", "就寝", "睡吧", "困了", "晚安"],
-            "工作": ["上班", "干活", "加班", "下班", "摸鱼"],
-            "学习": ["看书", "复习", "考试", "作业", "学习ing"]
-        }
-        
-        # 3. 网络用语扩展（精选）
-        internet_keywords = {
-            "笑死": ["xswl", "笑死我了", "哈哈哈", "笑不活了"],
-            "厉害": ["牛逼", "nb", "太强了", "牛啊"],
-            "无语": ["emmmm", "无语子", "裂开", "麻了"]
+            "吃饭": ["用餐", "吃饭饭", "吃点", "吃饭了吗", "饿了吗"],
+            "睡觉": ["休息", "睡吧", "困了", "晚安", "休息吧"],
+            "工作": ["上班", "干活", "加班", "下班", "搬砖"]
         }
         
         # 合并所有扩展
-        all_extensions = {**tech_keywords, **daily_keywords, **internet_keywords}
+        all_extensions = {**tech_scenarios, **daily_keywords}
         
-        # 查找匹配的关键词扩展
         for base_word, extensions in all_extensions.items():
             if base_word in keyword or keyword in base_word:
                 variants.extend(extensions)
         
-        # 4. 智能后缀扩展（仅对2-4字关键词）
-        if 2 <= len(keyword) <= 4:
-            smart_suffixes = ["了", "的", "了", "一下", "了", "吗"]
-            for suffix in smart_suffixes:
-                if len(keyword + suffix) <= 6:  # 限制总长度
-                    variants.append(keyword + suffix)
+        # 上下文相关扩展 - 针对错误场景
+        error_indicators = ["报错", "错误", "异常", "bug", "问题", "怎么办", "救命", "挂了", "崩了"]
+        if any(indicator in keyword for indicator in error_indicators):
+            # 添加用户求助时的常见表达
+            help_expressions = [
+                "有人吗", "大佬", "求助", "怎么办", "怎么解决", "帮帮忙", 
+                "在线等", "挺急的", "求教", "求救", "崩溃了", "救急", "大佬救命"
+            ]
+            variants.extend(help_expressions)
         
-        # 5. 同义词扩展（基于实际使用场景）
-        synonyms = {
-            "问题": ["毛病", "状况", "情况", "现象"],
-            "解决": ["修复", "搞定", "处理", "搞定它"],
-            "着急": ["焦虑", "烦躁", "上火", "急死"]
-        }
-        
-        for word, syns in synonyms.items():
-            if word in keyword:
-                variants.extend(syns)
-        
-        # 去重并按相关度排序
+        # 去重和排序（按相关性）
         seen = set()
-        unique_variants = []
+        final_variants = [keyword]  # 确保原词优先
         
-        for variant in variants:
-            variant = variant.strip()
-            if variant and variant != keyword and variant not in seen:
-                seen.add(variant)
-                # 计算相关度（越短越相关，包含关系更相关）
-                score = 100 - len(variant) * 2  # 长度惩罚
-                
-                # 包含关系加分
-                if keyword in variant or variant in keyword:
-                    score += 50
-                
-                # 技术词汇加分
-                tech_bonus_words = ["error", "bug", "异常", "错误", "故障"]
-                if any(tech in variant.lower() for tech in tech_bonus_words):
-                    score += 30
-                
-                unique_variants.append((variant, score))
+        # 按相关性分组排序
+        high_relevance = [kw for kw in variants if kw in str(all_extensions)]
+        medium_relevance = [kw for kw in variants if any(kw in str(ext) for ext in all_extensions.values())]
+        low_relevance = [kw for kw in variants if kw not in high_relevance + medium_relevance]
         
-        # 按分数排序，取前10个最相关的
-        unique_variants.sort(key=lambda x: x[1], reverse=True)
-        final_variants = [keyword] + [item[0] for item in unique_variants[:10]]
+        for group in [high_relevance, medium_relevance, low_relevance]:
+            for variant in group:
+                if variant != keyword and variant not in seen and 1 <= len(variant) <= 15:
+                    seen.add(variant)
+                    final_variants.append(variant)
         
-        logger.info(f"精准扩展 '{keyword}' → {len(final_variants)}个相关变体: {final_variants}")
-        return final_variants
+        return final_variants[:15]  # 增加到15个变体，确保覆盖全面
 
     def _generate_char_variants(self, keyword: str) -> List[str]:
         """简化的字符变形 - 仅保留实用的"了"和"的"后缀"""
