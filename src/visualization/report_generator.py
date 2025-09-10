@@ -3,7 +3,7 @@
 负责生成话题分析的可视化报告
 """
 
-from typing import Dict, Any
+from typing import Dict, Any, List
 import base64
 from datetime import datetime
 from astrbot.api import logger
