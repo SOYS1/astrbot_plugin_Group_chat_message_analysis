@@ -288,14 +288,14 @@ class ReportGenerator:
         messages = analysis.get('messages', [])
         
         if not messages:
-            return f"📊 关于"{keyword}"的分析报告\n\n没有找到相关的聊天记录。"
+            return f"📊 关于'{keyword}'的分析报告\n\n没有找到相关的聊天记录。"
         
         # 基础统计
         total_messages = len(messages)
         participants = list(set([msg.get('sender', {}).get('nickname', '未知') for msg in messages]))
         
         # 构建报告
-        report = f"📊 关于"{keyword}"的话题分析\n"
+        report = f"📊 关于'{keyword}'的话题分析\n"
         report += f"{'=' * 30}\n\n"
         
         # 参与统计

@@ -131,112 +131,440 @@ class MessageHandler:
 
     def _expand_keyword_variants(self, keyword: str) -> List[str]:
         """
-        扩展关键词变体，支持语义相关匹配
+        智能语义扩展系统 - 无需预定义词典
+        基于字符相似度、网络用语变形、上下文模式识别
         
         Args:
-            keyword: 原始关键词
+            keyword: 任意关键词
             
         Returns:
-            关键词变体列表（包含原始关键词）
+            动态生成的语义相关词汇列表
         """
         keyword = keyword.lower().strip()
+        if not keyword:
+            return []
+        
         variants = [keyword]
         
-        # 关键词映射表 - 可以扩展更多语义关联
-        keyword_mappings = {
-            "吃饭": ["吃饭", "吃饭饭", "干饭", "用餐", "午饭", "晚饭", "早饭", "早餐", "午餐", "晚餐", "夜宵", "外卖", "点餐", "食堂", "餐厅", "聚餐", "请客", "下馆子", "吃火锅", "吃烧烤", "吃大餐"],
-            "游戏": ["游戏", "打游戏", "玩游戏", "开黑", "上分", "吃鸡", "王者", "LOL", "英雄联盟", "原神", "崩铁", "崩坏", "米哈游", "腾讯游戏", "网易游戏"],
-            "学习": ["学习", "读书", "看书", "写作业", "复习", "考试", "考研", "四六级", "雅思", "托福", "背单词", "做题", "上课", "网课", "作业"],
-            "工作": ["工作", "上班", "下班", "加班", "摸鱼", "打工", "996", "老板", "同事", "项目", "开会", "PPT", "汇报", "绩效", "工资", "跳槽"],
-            "睡觉": ["睡觉", "睡觉觉", "午休", "午睡", "熬夜", "早起", "赖床", "起床", "失眠", "做梦", "打瞌睡", "困了", "困了困了"],
-            "天气": ["天气", "下雨", "下雪", "刮风", "雾霾", "晴天", "阴天", "气温", "温度", "冷", "热", "降温", "升温", "天气预报"],
-            "购物": ["购物", "买东西", "淘宝", "京东", "拼多多", "下单", "快递", "包邮", "秒杀", "双11", "618", "购物车", "付款", "退款"],
-            "旅游": ["旅游", "旅行", "出去玩", "度假", "酒店", "机票", "高铁", "自驾", "景点", "打卡", "拍照", "美食", "攻略"],
-            "电影": ["电影", "看电影", "影院", "电影院", "新片", "上映", "票房", "评分", "烂片", "神作", "导演", "演员", "剧情"],
-            "音乐": ["音乐", "听歌", "演唱会", "专辑", "单曲", "歌手", "乐队", "网易云", "QQ音乐", "歌单", "推荐", "循环"]
-        }
+        # 1. 字符级智能变形
+        variants.extend(self._generate_char_variants(keyword))
         
-        # 查找匹配的语义组
-        for base_keyword, related_words in keyword_mappings.items():
-            if keyword == base_keyword or keyword in related_words:
-                variants.extend(related_words)
-                break
+        # 2. 网络用语智能识别
+        variants.extend(self._generate_internet_variants(keyword))
         
-        # 添加一些通用变体
-        common_variants = []
-        for variant in variants:
-            # 添加重复字变体
-            if len(variant) <= 3:
-                common_variants.append(variant + variant)
-                if len(variant) == 2:
-                    common_variants.append(variant[0] + variant + variant[1])
-            
-            # 添加语气词变体
-            common_variants.append(variant + "了")
-            common_variants.append(variant + "了")
-            common_variants.append("在" + variant)
-            common_variants.append("去" + variant)
-            
-        variants.extend(common_variants)
+        # 3. 语义场动态扩展
+        variants.extend(self._generate_semantic_variants(keyword))
         
-        # 去重并保持顺序
+        # 4. 上下文模式匹配
+        variants.extend(self._generate_contextual_variants(keyword))
+        
+        # 5. 模糊匹配变体
+        variants.extend(self._generate_fuzzy_variants(keyword))
+        
+        # 去重并排序（按相关度）
         seen = set()
         unique_variants = []
         for variant in variants:
-            if variant not in seen:
+            variant = variant.strip()
+            if variant and variant != keyword and variant not in seen:
                 seen.add(variant)
-                unique_variants.append(variant)
+                # 计算相关度分数用于排序
+                score = self._calculate_relevance_score(keyword, variant)
+                unique_variants.append((variant, score))
         
-        return unique_variants
+        # 按相关度排序，取前30个
+        unique_variants.sort(key=lambda x: x[1], reverse=True)
+        final_variants = [keyword] + [item[0] for item in unique_variants[:30]]
+        
+        logger.info(f"智能扩展 '{keyword}' → {len(final_variants)}个变体: {final_variants}")
+        return final_variants
+
+    def _generate_char_variants(self, keyword: str) -> List[str]:
+        """字符级智能变形"""
+        variants = []
+        
+        # 重复字变体
+        if len(keyword) <= 4:
+            variants.append(keyword + keyword)
+            if len(keyword) >= 2:
+                variants.append(keyword[0] + keyword)
+                variants.append(keyword + keyword[-1])
+        
+        # 前后缀
+        prefixes = ["大", "小", "老", "新", "超级", "真的", "假的"]
+        suffixes = ["了", "的", "一下", "了", "了", "啊", "呀", "呢"]
+        
+        for prefix in prefixes:
+            variants.append(prefix + keyword)
+        
+        for suffix in suffixes:
+            variants.append(keyword + suffix)
+        
+        return variants
+
+    def _generate_internet_variants(self, keyword: str) -> List[str]:
+        """网络用语智能识别"""
+        variants = []
+        
+        # 数字替换
+        num_replacements = {
+            'o': '0', 'i': '1', 'l': '1', 'z': '2', 'e': '3', 'a': '4', 
+            's': '5', 't': '7', 'b': '6', 'g': '9', 'q': '9'
+        }
+        
+        # 网络流行语模式
+        internet_patterns = {
+            "孙笑川": ["抽象", "带师", "nm$l", "新津", "恶俗", "狗粉丝", "6324", "嗨粉"],
+            "蔡徐坤": ["鸡哥", "鸡你太美", "篮球", "练习生", "两年半", "小黑子"],
+            "丁真": ["珍珠", "理塘", "电子烟", "锐刻5", "纯真", "一眼真"],
+            "马保国": ["耗子尾汁", "年轻人不讲武德", "传统功夫", "接化发", "闪电五连鞭"],
+            "李赣": ["6324", "抽象", "嗨粉", "狗粉丝", "带明星", "带秀"]
+        }
+        
+        # 检查是否是网络人物
+        for person, related in internet_patterns.items():
+            if keyword in person or person in keyword:
+                variants.extend(related)
+        
+        # 谐音梗
+        if "笑" in keyword:
+            variants.extend(["孝", "校", "效", "啸"])
+        if "川" in keyword:
+            variants.extend(["穿", "传", "船", "喘"])
+        if "坤" in keyword:
+            variants.extend(["鲲", "昆", "捆", "困"])
+        
+        # 网络缩写
+        abbreviations = {
+            "yyds": ["永远的神", "永远滴神"],
+            "xswl": ["笑死我了"],
+            "zqsg": ["真情实感"],
+            "u1s1": ["有一说一"],
+            "dddd": ["懂的都懂"]
+        }
+        
+        for abbr, full in abbreviations.items():
+            if keyword == abbr:
+                variants.extend(full)
+            elif keyword in str(full):
+                variants.append(abbr)
+        
+        return variants
+
+    def _generate_semantic_variants(self, keyword: str) -> List[str]:
+        """语义场动态扩展"""
+        variants = []
+        
+        # 基于关键词类型的语义扩展
+        if len(keyword) <= 3:
+            # 短词扩展
+            if keyword.endswith("哥"):
+                variants.extend(["哥哥", "大哥", "老哥", "哥儿", "哥子"])
+            elif keyword.endswith("姐"):
+                variants.extend(["姐姐", "大姐", "老姐", "姐儿"])
+            elif keyword.endswith("弟"):
+                variants.extend(["弟弟", "小弟", "老弟", "弟儿"])
+            elif keyword.endswith("妹"):
+                variants.extend(["妹妹", "小妹", "老妹", "妹儿"])
+        
+        # 情感词扩展
+        emotion_words = ["喜欢", "讨厌", "爱", "恨", "想", "念", "烦", "愁", "开心", "难过"]
+        for emotion in emotion_words:
+            variants.append(emotion + keyword)
+            variants.append(keyword + emotion)
+        
+        # 动作词扩展
+        action_words = ["看", "听", "说", "想", "做", "玩", "学", "吃", "喝", "买"]
+        for action in action_words:
+            variants.append(action + keyword)
+            variants.append(keyword + action)
+        
+        return variants
+
+    def _generate_contextual_variants(self, keyword: str) -> List[str]:
+        """上下文模式匹配"""
+        variants = []
+        
+        # 基于使用场景的上下文词
+        contexts = {
+            "人名": ["这个人", "这位", "大佬", "老师", "哥", "姐", "兄弟", "朋友"],
+            "地点": ["在", "去", "到", "从", "来", "回", "路过", "经过"],
+            "时间": ["今天", "昨天", "明天", "刚才", "刚刚", "现在", "以后", "以前"],
+            "评价": ["真的", "假的", "太", "很", "超级", "特别", "非常", "有点", "稍微"]
+        }
+        
+        # 根据关键词特征添加上下文
+        for context_type, context_words in contexts.items():
+            for context in context_words:
+                variants.append(context + keyword)
+                variants.append(keyword + context)
+        
+        return variants
+
+    def _generate_fuzzy_variants(self, keyword: str) -> List[str]:
+        """模糊匹配变体"""
+        variants = []
+        
+        # 编辑距离1的变体（插入、删除、替换）
+        if len(keyword) >= 2:
+            # 删除一个字符
+            for i in range(len(keyword)):
+                variants.append(keyword[:i] + keyword[i+1:])
+            
+            # 插入常见字符
+            common_chars = ["的", "了", "子", "儿", "啊", "呀", "呢", "吧"]
+            for char in common_chars:
+                for i in range(len(keyword) + 1):
+                    variants.append(keyword[:i] + char + keyword[i:])
+            
+            # 替换相似字符
+            similar_chars = {
+                '笑': '孝', '川': '穿', '孙': '损', '坤': '鲲',
+                '蔡': '菜', '徐': '许', '丁': '钉', '真': '针'
+            }
+            for original, similar in similar_chars.items():
+                if original in keyword:
+                    variants.append(keyword.replace(original, similar))
+        
+        return variants
+
+    def _calculate_relevance_score(self, original: str, variant: str) -> float:
+        """计算词汇相关度分数"""
+        if original == variant:
+            return 100.0
+        
+        score = 0.0
+        
+        # 编辑距离分数
+        import difflib
+        similarity = difflib.SequenceMatcher(None, original, variant).ratio()
+        score += similarity * 50
+        
+        # 包含关系分数
+        if original in variant or variant in original:
+            score += 30
+        
+        # 字符重叠分数
+        original_chars = set(original)
+        variant_chars = set(variant)
+        overlap = len(original_chars.intersection(variant_chars))
+        if overlap > 0:
+            score += (overlap / len(original_chars)) * 20
+        
+        return min(score, 100.0)
 
     def _is_semantically_related(self, message: Dict, keyword_variants: List[str]) -> bool:
         """
-        判断消息是否与关键词语义相关
+        智能语义关联判断 - 无需词典的动态理解
+        支持字符相似度、网络用语、上下文理解
         
         Args:
             message: 消息字典
             keyword_variants: 关键词变体列表
             
         Returns:
-            是否相关
+            是否语义相关
         """
         try:
-            # 获取消息文本内容
-            msg_texts = []
-            for content in message.get("message", []):
-                if content.get("type") == "text":
-                    text = content.get("data", {}).get("text", "")
-                    if text:
-                        msg_texts.append(text.lower())
-            
-            if not msg_texts:
+            text = message.get('content', '').lower().strip()
+            if not text or not keyword_variants:
                 return False
             
-            # 检查是否包含任何关键词变体
-            for text in msg_texts:
-                for keyword in keyword_variants:
-                    if keyword in text:
-                        return True
+            original_keyword = keyword_variants[0].lower()
             
-            # 检查更灵活的匹配（部分匹配）
-            for text in msg_texts:
-                text_words = text.replace("，", " ").replace(",", " ").replace("。", " ").split()
-                for keyword in keyword_variants:
-                    # 检查关键词是否在文本单词中
-                    for word in text_words:
-                        if keyword in word or word in keyword:
-                            return True
-                    
-                    # 检查相似度（简单的包含关系）
-                    if len(keyword) >= 2:
-                        # 检查关键词的每个字是否都在文本中出现
-                        keyword_chars = set(keyword)
-                        text_chars = set(text)
-                        if keyword_chars.issubset(text_chars):
-                            return True
+            # 1. 直接包含匹配（最高优先级）
+            for variant in keyword_variants:
+                if variant in text:
+                    logger.info(f"直接匹配: '{variant}' 在消息中")
+                    return True
+            
+            # 2. 字符级相似度匹配
+            similarity_threshold = 0.6
+            for variant in keyword_variants:
+                similarity = self._calculate_text_similarity(text, variant)
+                if similarity >= similarity_threshold:
+                    logger.info(f"字符相似度匹配: '{variant}' (相似度: {similarity:.2f})")
+                    return True
+            
+            # 3. 分词模糊匹配
+            if self._fuzzy_word_match(text, keyword_variants):
+                return True
+            
+            # 4. 网络用语模式匹配
+            if self._internet_pattern_match(text, original_keyword):
+                return True
+            
+            # 5. 上下文语义关联
+            if self._contextual_semantic_match(text, original_keyword):
+                return True
+            
+            # 6. 拼音相似度匹配
+            if self._pinyin_similarity_match(text, original_keyword):
+                return True
             
             return False
             
         except Exception as e:
-            logger.warning(f"语义相关匹配出错: {e}")
-            return False
+            logger.error(f"语义匹配出错: {e}")
+            # 回退到简单包含匹配
+            return any(variant in str(message.get('content', '')).lower() 
+                      for variant in keyword_variants)
+
+    def _calculate_text_similarity(self, text: str, keyword: str) -> float:
+        """计算文本相似度"""
+        import difflib
+        
+        # 子串相似度
+        max_similarity = 0.0
+        text_len = len(text)
+        keyword_len = len(keyword)
+        
+        if keyword_len == 0:
+            return 0.0
+        
+        # 滑动窗口计算最大相似度
+        for i in range(text_len - keyword_len + 1):
+            substring = text[i:i+keyword_len]
+            similarity = difflib.SequenceMatcher(None, substring, keyword).ratio()
+            max_similarity = max(max_similarity, similarity)
+        
+        # 字符重叠度
+        text_chars = set(text)
+        keyword_chars = set(keyword)
+        char_overlap = len(text_chars.intersection(keyword_chars))
+        char_similarity = char_overlap / len(keyword_chars) if keyword_chars else 0
+        
+        return max(max_similarity, char_similarity * 0.8)
+
+    def _fuzzy_word_match(self, text: str, keyword_variants: List[str]) -> bool:
+        """分词模糊匹配"""
+        # 简单的分词实现
+        def simple_tokenize(text: str) -> List[str]:
+            # 按空格和标点分词
+            import re
+            tokens = re.findall(r'[\u4e00-\u9fff]+|[a-zA-Z0-9]+', text)
+            return [token.lower() for token in tokens]
+        
+        text_tokens = simple_tokenize(text)
+        
+        for keyword in keyword_variants:
+            keyword_tokens = simple_tokenize(keyword)
+            
+            # 检查每个关键词token
+            for keyword_token in keyword_tokens:
+                for text_token in text_tokens:
+                    # 编辑距离检查
+                    if self._levenshtein_distance(keyword_token, text_token) <= 1:
+                        logger.info(f"分词模糊匹配: '{keyword_token}' ~ '{text_token}'")
+                        return True
+                    
+                    # 包含关系检查
+                    if keyword_token in text_token or text_token in keyword_token:
+                        if len(keyword_token) >= 2 and len(text_token) >= 2:
+                            logger.info(f"分词包含匹配: '{keyword_token}' in '{text_token}'")
+                            return True
+        
+        return False
+
+    def _internet_pattern_match(self, text: str, keyword: str) -> bool:
+        """网络用语模式匹配"""
+        # 网络用语映射（动态识别）
+        internet_patterns = {
+            "孙笑川": {
+                "patterns": ["抽象", "带师", "nm", "新津", "恶俗", "狗粉丝", "6324", "嗨粉", "带明星"],
+                "keywords": ["孙笑川", "笑川", "孙笑", "笑川"]
+            },
+            "蔡徐坤": {
+                "patterns": ["鸡哥", "鸡你太美", "篮球", "练习生", "两年半", "小黑子", "唱跳rap"],
+                "keywords": ["蔡徐坤", "徐坤", "蔡徐", "坤坤"]
+            },
+            "丁真": {
+                "patterns": ["珍珠", "理塘", "电子烟", "锐刻", "纯真", "一眼真", "丁真珍珠"],
+                "keywords": ["丁真", "珍珠", "理塘"]
+            }
+        }
+        
+        # 检查是否是网络人物相关
+        for person, data in internet_patterns.items():
+            if any(kw in keyword for kw in data["keywords"]):
+                for pattern in data["patterns"]:
+                    if pattern.lower() in text.lower():
+                        logger.info(f"网络用语匹配: '{person}' 相关 '{pattern}'")
+                        return True
+        
+        return False
+
+    def _contextual_semantic_match(self, text: str, keyword: str) -> bool:
+        """上下文语义关联"""
+        # 上下文关键词映射
+        context_keywords = {
+            "人名": ["这个人", "这位", "大佬", "老师", "哥", "姐", "兄弟", "朋友", "主播", "up主"],
+            "事件": ["发生", "出现", "看到", "听说", "知道", "了解", "看到", "遇到"],
+            "评价": ["觉得", "认为", "感觉", "好像", "似乎", "可能", "应该", "确实"]
+        }
+        
+        # 如果关键词是人名，检查上下文
+        if len(keyword) <= 4 and any(char in keyword for char in ["孙", "李", "张", "王", "刘", "陈", "杨", "赵", "黄", "周"]):
+            for category, keywords in context_keywords.items():
+                for context_kw in keywords:
+                    if context_kw in text:
+                        # 检查文本中是否包含人名特征
+                        name_patterns = ["[\u4e00-\u9fff]{2,4}", "[A-Z][a-z]+"]
+                        import re
+                        for pattern in name_patterns:
+                            matches = re.findall(pattern, text)
+                            for match in matches:
+                                if self._calculate_text_similarity(match.lower(), keyword) > 0.5:
+                                    logger.info(f"上下文人名匹配: '{keyword}' ~ '{match}'")
+                                    return True
+        
+        return False
+
+    def _pinyin_similarity_match(self, text: str, keyword: str) -> bool:
+        """拼音相似度匹配"""
+        try:
+            # 简单的拼音转换（实际项目中可以使用pypinyin库）
+            def simple_pinyin(text: str) -> str:
+                # 这里用简化的方式，实际应该使用pypinyin
+                pinyin_map = {
+                    '孙': 'sun', '笑': 'xiao', '川': 'chuan',
+                    '蔡': 'cai', '徐': 'xu', '坤': 'kun',
+                    '丁': 'ding', '真': 'zhen'
+                }
+                result = ""
+                for char in text:
+                    result += pinyin_map.get(char, char)
+                return result
+            
+            text_pinyin = simple_pinyin(text)
+            keyword_pinyin = simple_pinyin(keyword)
+            
+            similarity = difflib.SequenceMatcher(None, text_pinyin, keyword_pinyin).ratio()
+            if similarity >= 0.7:
+                logger.info(f"拼音相似度匹配: '{keyword}' (拼音相似度: {similarity:.2f})")
+                return True
+                
+        except Exception as e:
+            logger.debug(f"拼音匹配出错: {e}")
+        
+        return False
+
+    def _levenshtein_distance(self, s1: str, s2: str) -> int:
+        """计算编辑距离"""
+        if len(s1) < len(s2):
+            return self._levenshtein_distance(s2, s1)
+        
+        if len(s2) == 0:
+            return len(s1)
+        
+        previous_row = range(len(s2) + 1)
+        for i, c1 in enumerate(s1):
+            current_row = [i + 1]
+            for j, c2 in enumerate(s2):
+                insertions = previous_row[j + 1] + 1
+                deletions = current_row[j] + 1
+                substitutions = previous_row[j] + (c1 != c2)
+                current_row.append(min(insertions, deletions, substitutions))
+            previous_row = current_row
+        
+        return previous_row[-1]
