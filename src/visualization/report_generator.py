@@ -31,7 +31,7 @@ class ReportGenerator:
             html_content = self._generate_html_report(analysis_result, keyword, group_id)
             
             # 使用AstrBot内置的HTML渲染服务
-            image_url = await html_render_func(html_content, width=900, height=1200)
+            image_url = await html_render_func(html_content)
             
             return image_url
             
